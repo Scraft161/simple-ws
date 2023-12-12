@@ -67,38 +67,12 @@ pub fn serve_file(http_request: HttpRequest) -> HttpResponse {
         });
     }
 
-    let status_text = match status_code {
-        100 => "CONTINUE",
-        101 => "SWITCHING PROTOCOLS",
-        102 => "PROCESSING",
-        103 => "EARLY HINTS",
-        200 => "OK",
-        201 => "CREATED",
-        202 => "ACCEPTED",
-        203 => "NON-AUTHORATIVE INFORMATION",
-        204 => "NO CONTENT",
-        205 => "RESET CONTENT",
-        206 => "PARTIAL CONTENT",
-        207 => "MULTI STATUS",
-        208 => "ALREADY REPORTED",
-        218 => "THIS IS FINE",
-        226 => "IM USED",
-        // Skipping 3xx
-        400 => "BAD REQUEST",
-        401 => "UNAUTHORIZED",
-        402 => "PAYMENT REQUIRED",
-        403 => "FORBIDDEN",
-        404 => "NOT FOUND",
-        418 => "I'M A TEAPOT",
-        _ => "",
-    };
-
     HttpResponse {
         protocol_ver: String::from("HTTP/1.1"),
         status_code,
-        status_text: String::from(status_text),
         headers,
         content: html,
+        ..Default::default()
     }
 }
 

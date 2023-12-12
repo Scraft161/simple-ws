@@ -52,7 +52,6 @@ fn handle_connection(mut stream: TcpStream) {
         let response = HttpResponse {
             protocol_ver: String::from("HTTP/1.1"),
             status_code: 200,
-            status_text: String::from("OK"),
             headers: vec![
                 HttpHeader {
                     key: String::from("Content-Type"),
@@ -64,6 +63,7 @@ fn handle_connection(mut stream: TcpStream) {
                 },
             ],
             content: String::from(""),
+            ..Default::default()
         }.to_string();
 
         let mut response = response.as_bytes().to_vec();
@@ -78,7 +78,6 @@ fn handle_connection(mut stream: TcpStream) {
         HttpResponse {
             protocol_ver: String::from("HTTP/1.1"),
             status_code: 418,
-            status_text: String::from("I'M A TEAPOT"),
             headers: vec![
                 HttpHeader {
                     key: String::from("Content-Type"),
@@ -90,18 +89,19 @@ fn handle_connection(mut stream: TcpStream) {
                 },
             ],
             content: html,
+            ..Default::default()
         }
     } else if request.uri.starts_with("/api") {
         let html = String::from("<h1>Oops!</h1><p>I am a teapot.</p>");
         HttpResponse {
             protocol_ver: String::from("HTTP/1.1"),
             status_code: 418,
-            status_text: String::from("I'M A TEAPOT"),
             headers: vec![HttpHeader {
                 key: String::from("Content-Length"),
                 val: format!("{}", html.len()),
             }],
             content: html,
+            ..Default::default()
         }
     } else {
         serve::serve_file(request)

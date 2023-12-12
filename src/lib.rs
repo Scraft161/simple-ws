@@ -149,10 +149,11 @@ impl HttpRequest {
     }
 }
 
+#[derive(Default)]
 pub struct HttpResponse {
     pub protocol_ver: String,
     pub status_code: usize,
-    pub status_text: String,
+    pub status_text: Option<String>,
     pub headers: Vec<HttpHeader>,
     pub content: String,
 }
@@ -163,13 +164,106 @@ impl std::fmt::Display for HttpResponse {
         for header in &self.headers {
             headers.push_str(&format!("{}: {}\r\n", header.key, header.val));
         }
-        write!(f, "{} {} {}\r\n{}\r\n{}",
-            self.protocol_ver,
-            self.status_code,
-            self.status_text,
-            headers,
-            self.content)
+
+        if let Some(status_text) = &self.status_text {
+            write!(f, "{} {} {}\r\n{}\r\n{}",
+                self.protocol_ver,
+                self.status_code,
+                status_text,
+                headers,
+                self.content)
+        } else {
+            write!(f, "{} {} {}\r\n{}\r\n{}",
+                self.protocol_ver,
+                self.status_code,
+                status_text_from_code(self.status_code),
+                headers,
+                self.content)
+        }
     }
+}
+
+pub fn status_text_from_code(status_code: usize) -> String {
+    match status_code {
+        // 1XX: INFORMATIONAL
+        100 => "CONTINUE",
+        101 => "SWITCHING PROTOCOLS",
+        102 => "PROCESSING",
+        103 => "EARLY HINTS",
+
+        // 2XX: SUCCESS
+        200 => "OK",
+        201 => "CREATED",
+        202 => "ACCEPTED",
+        203 => "NON-AUTHORATIVE INFORMATION",
+        204 => "NO CONTENT",
+        205 => "RESET CONTENT",
+        206 => "PARTIAL CONTENT",
+        207 => "MULTI STATUS",
+        208 => "ALREADY REPORTED",
+        218 => "THIS IS FINE",
+        226 => "IM USED",
+
+        // 3XX: REDIRECTION
+        300 => "MULTIPLE CHOICES",
+        301 => "MOVED PERMANENTLY",
+        302 => "FOUND",
+        303 => "SEE OTHER",
+        304 => "NOT MODIFIED",
+        305 => "USE PROXY",
+        306 => "SWITCH PROXY",
+        307 => "TEMPORARY REDIRECT",
+        308 => "PERMANENT REDIRECT",
+
+        // 4XX: CLIENT ERROR
+        400 => "BAD REQUEST",
+        401 => "UNAUTHORIZED",
+        402 => "PAYMENT REQUIRED",
+        403 => "FORBIDDEN",
+        404 => "NOT FOUND",
+        405 => "METHOD NOT ALLOWED",
+        406 => "NOT ACCEPTABLE",
+        407 => "PROXY AUTHENTICATION REQUIRED",
+        408 => "REQUEST TIMEOUT",
+        409 => "CONFLICT",
+        410 => "GONE",
+        411 => "LENGTH REQUIRED",
+        412 => "PRECONDITION FAILED",
+        413 => "PAYLOAD TOO LARGE",
+        414 => "URI TOO LONG",
+        415 => "UNSUPPORTED MEDIA TYPE",
+        416 => "RANGE NOT SATISFIABLE",
+        417 => "EXPECTATION FAILED",
+        418 => "I'M A TEAPOT",
+        419 => "PAGE EXPIRED",
+        421 => "MISDIRECTED REQUEST",
+        422 => "UNPROCESSABLE ENTITY",
+        423 => "LOCKED",
+        424 => "FAILED DEPENDENCY",
+        425 => "TOO EARLY",
+        426 => "UPGRADE REQUIRED",
+        428 => "PRECONDITION REQUIRED",
+        429 => "TOO MANY REQUESTS",
+        431 => "REQUEST HEADER FIELDS TOO LARGE",
+        440 => "LOGIN TIME-OUT",
+        451 => "UNAVAILABLE FOR LEGAL REASONS",
+
+        // 5XX: SERVER ERROR
+        500 => "INTERNAL SERVER ERROR",
+        501 => "NOT IMPLEMENTED",
+        502 => "BAD GATEWAY",
+        503 => "SERVICE UNAVAILABLE",
+        504 => "GATEWAY TIMEOUT",
+        505 => "HTTP VERSION NOT SUPPORTED",
+        506 => "VARIANT ALSO NEGOTIATES",
+        507 => "INSUFFICIENT STORAGE",
+        508 => "LOOP DETECTED",
+        509 => "BANDWIDTH LIMIT EXCEEDED",
+        // TODO: Finish
+
+        // FALLBACK
+        _ => "NON-STANDARD ERROR",
+    }.to_string()
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
