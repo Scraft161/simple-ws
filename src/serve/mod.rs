@@ -27,14 +27,11 @@ pub fn serve_file(http_request: HttpRequest) -> HttpResponse {
         _ if http_request.uri.ends_with(".js") => {
             mime_type = "text/js";
             serve_raw(&http_request.uri)
-        }
+        },
         _ if http_request.uri.ends_with(".png") => {
             mime_type = "image/png";
             serve_raw(&http_request.uri)
-        }
-        //_ => {
-        //    Err(NotFoundError.into())
-        //},
+        },
         _ => match serve_md(&(http_request.uri.clone() + ".md")) {
             Ok(data) => Ok(data),
             Err(_) => serve_html(&(http_request.uri.clone() + ".html")),

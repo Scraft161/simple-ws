@@ -92,10 +92,10 @@ fn handle_connection(mut stream: TcpStream) {
             ..Default::default()
         }
     } else if request.uri.starts_with("/api") {
-        let html = String::from("<h1>Oops!</h1><p>I am a teapot.</p>");
+        let html = String::from("<h1>Oops!</h1><p>Payment Required.</p>");
         HttpResponse {
             protocol_ver: String::from("HTTP/1.1"),
-            status_code: 418,
+            status_code: 402,
             headers: vec![HttpHeader {
                 key: String::from("Content-Length"),
                 val: format!("{}", html.len()),
