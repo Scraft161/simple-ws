@@ -1,76 +1,61 @@
 use std::fs;
-use web_backend::{
-    HttpRequest,
-    HttpResponse,
-    HttpHeader,
+
+//use html_node::Node;
+use snowboard::{
+    headers,
+    Headers,
+    Request,
 };
 
-use crate::WORKING_DIR;
+use crate::{
+    WORKING_DIR,
+    format_error,
+};
 
 mod markdown;
 
-pub fn serve_file(http_request: HttpRequest) -> HttpResponse {
-    let mut status_code = 200;
+pub fn serve_file(http_request: Request, pretty: bool) -> (u16, Headers, String) {
+    let mut status = 200;
     let mut mime_type = "text/html";
-    let mut headers = vec![];
-    let html = match http_request.uri {
-        _ if http_request.uri.ends_with('/') => match serve_md(&(http_request.uri.clone() + "index.md")) {
+    let content = match http_request.url {
+        _ if http_request.url.ends_with('/') => match serve_md(&(http_request.url.clone() + "index.md")) {
             Ok(data) => Ok(data),
-            Err(_) => serve_html(&(http_request.uri.clone() + "index.html")),
+            Err(_) => serve_html(&(http_request.url.clone() + "index.html")),
         },
-        _ if http_request.uri.ends_with(".md") => serve_md(&http_request.uri),
-        _ if http_request.uri.ends_with(".html") => serve_html(&http_request.uri),
-        _ if http_request.uri.ends_with(".css") => {
+        _ if http_request.url.ends_with(".md") => serve_md(&http_request.url),
+        _ if http_request.url.ends_with(".html") => serve_html(&http_request.url),
+        _ if http_request.url.ends_with(".css") => {
             mime_type = "text/css";
-            serve_raw(&http_request.uri)
+            serve_raw(&http_request.url)
         },
-        _ if http_request.uri.ends_with(".js") => {
+        _ if http_request.url.ends_with(".js") => {
             mime_type = "text/js";
-            serve_raw(&http_request.uri)
+            serve_raw(&http_request.url)
         },
-        _ if http_request.uri.ends_with(".png") => {
+        _ if http_request.url.ends_with(".png") => {
             mime_type = "image/png";
-            serve_raw(&http_request.uri)
+            serve_raw(&http_request.url)
         },
-        _ => match serve_md(&(http_request.uri.clone() + ".md")) {
+        _ => match serve_md(&(http_request.url.clone() + ".md")) {
             Ok(data) => Ok(data),
-            Err(_) => serve_html(&(http_request.uri.clone() + ".html")),
+            Err(_) => serve_html(&(http_request.url.clone() + ".html")),
         }
     };
 
-    let html = match html {
+    let content = match content {
         Ok(data) => data,
         Err(_) => {
-            status_code = 404;
+            status = 404;
             mime_type = "text/html";
-            fs::read_to_string("404.html").unwrap()
+            format_error(404, "Not found", "The page you are looking for has not been found.", pretty)
         }
     };
 
-    headers.push(HttpHeader {
-        key: String::from("Content-Type"),
-        val: String::from(mime_type),
-    });
-    headers.push(HttpHeader {
-        key: String::from("Content-Length"),
-        val: format!("{}", html.len()),
-    });
+    let headers = headers! {
+        "Content-Type" => mime_type,
+    };
 
-    // Allow the browser to preload css
-    if http_request.uri.contains("/wiki") {
-        headers.push(HttpHeader {
-            key: String::from("Link"),
-            val: String::from("/assets/css/wiki/master.css"),
-        });
-    }
-
-    HttpResponse {
-        protocol_ver: String::from("HTTP/1.1"),
-        status_code,
-        headers,
-        content: html,
-        ..Default::default()
-    }
+    (status, headers, content)
 }
 
 fn serve_md(path: &str) -> Result<String, Box<dyn std::error::Error>> {

@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 markdown = "1.0.0-alpha.16"
+snowboard = { version = "1.0.3", features = ["async"] }
+html-node = { version = "0.5.0", features = ["typed", "pretty"] }
+const_format = "0.2.32"
+chrono = "0.4.31"

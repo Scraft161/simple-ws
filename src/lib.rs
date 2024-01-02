@@ -279,3 +279,13 @@ pub struct HttpHeader {
     pub key: String,
     pub val: String,
 }
+
+pub fn log<T: std::fmt::Debug>(log: T) {
+    let now = chrono::Local::now().to_rfc3339();
+    println!("[{now}]: {log:#?}");
+}
+
+pub fn log_with_context<T: std::fmt::Debug, U: std::fmt::Debug>(err: T, ctx: U) {
+    let now = chrono::Local::now().to_rfc3339();
+    println!("[{now}]: {err:#?} | {ctx:#?}");
+}
