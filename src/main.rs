@@ -23,7 +23,7 @@ pub const WORKING_DIR: &str = "/var/www/html";
 const BIND_ADDRESS: &str = "0.0.0.0";
 const PORT: usize = 8080;
 //const THREADS: usize = 4;
-const PRETTY_PRINT_DEFAULT: bool = true;
+const PRETTY_PRINT_DEFAULT: bool = false;
 
 // Our server vars
 pub const ASSET_PATH: &str = concatcp!("{WORKING_DIR}/assets");

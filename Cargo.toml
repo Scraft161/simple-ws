@@ -11,3 +11,6 @@ snowboard = { version = "1.0.3", features = ["async"] }
 html-node = { version = "0.5.0", features = ["typed", "pretty"] }
 const_format = "0.2.32"
 chrono = "0.4.31"
+lazy_static = "1.4.0"
+regex = "1.10.2"
+ftags = { git = "https://github.com/Scraft161/ftags", tag = "0.2.1" }
