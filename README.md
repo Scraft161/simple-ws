@@ -12,3 +12,9 @@ I wanted to explore server side scripting without the need for php or node, addi
 
 - [ ] Try to mimic NGinX's Virtualhosts.
 - [x] Auto generate the status strings from the code (this is partially there in the `serve_file` function; but doesn't actually work).
+
+## Known bugs
+
+1. ignores markdown parsing opts in frontmatter
+2. spoiler blocks fail with multiple paragraphs
+3. use <details> for spoilers instead of our own bad code...

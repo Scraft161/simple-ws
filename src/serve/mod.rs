@@ -10,24 +10,23 @@ mod markdown;
 pub fn serve_file(http_request: Request, pretty: bool) -> (u16, Headers, Vec<u8>) {
 	let mut status = 200;
 	let mut mime_type = "text/html";
-	let new = http_request
-		.headers
-		.get("Host")
-		.unwrap()
-		.starts_with("test.");
 
 	let content = match http_request.url {
 		_ if http_request.url.ends_with('/') => {
-			match serve_md(&(http_request.url.clone() + "index.md"), pretty, new) {
+			match serve_md(&(http_request.url.clone() + "index.md"), pretty) {
 				Ok(data) => Ok(data),
 				Err(_) => serve_html(&(http_request.url.clone() + "index.html")),
 			}
 		}
-		_ if http_request.url.ends_with(".md") => serve_md(&http_request.url, pretty, new),
+		_ if http_request.url.ends_with(".md") => serve_md(&http_request.url, pretty),
 		_ if http_request.url.ends_with(".html") => serve_html(&http_request.url),
 		_ if http_request.url.ends_with(".css") => {
 			mime_type = "text/css";
 			serve_raw(&http_request.url)
+		}
+		_ if http_request.url.ends_with(".scss") || http_request.url.ends_with(".sass") => {
+			mime_type = "text/css";
+			serve_scss(&http_request.url)
 		}
 		_ if http_request.url.ends_with(".js") => {
 			mime_type = "text/javascript";
@@ -35,6 +34,14 @@ pub fn serve_file(http_request: Request, pretty: bool) -> (u16, Headers, Vec<u8>
 		}
 		_ if http_request.url.ends_with(".png") => {
 			mime_type = "image/png";
+			serve_raw(&http_request.url)
+		}
+		_ if http_request.url.ends_with(".jxl") => {
+			mime_type = "image/jxl";
+			serve_raw(&http_request.url)
+		}
+		_ if http_request.url.ends_with(".webp") => {
+			mime_type = "image/webp";
 			serve_raw(&http_request.url)
 		}
 		_ if http_request.url.ends_with(".svg") => {
@@ -51,7 +58,7 @@ pub fn serve_file(http_request: Request, pretty: bool) -> (u16, Headers, Vec<u8>
 			serve_raw(&http_request.url)
 		}
 
-		_ => match serve_md(&(http_request.url.clone() + ".md"), pretty, new) {
+		_ => match serve_md(&(http_request.url.clone() + ".md"), pretty) {
 			Ok(data) => Ok(data),
 			Err(_) => serve_html(&(http_request.url.clone() + ".html")),
 		},
@@ -79,18 +86,36 @@ pub fn serve_file(http_request: Request, pretty: bool) -> (u16, Headers, Vec<u8>
 	(status, headers, content)
 }
 
-fn serve_md(path: &str, pretty: bool, new: bool) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+fn serve_scss(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 	let path = WORKING_DIR.to_string() + path;
 
-	if new {
-		let html = markdown::convert_wiki(&path)?;
-		if pretty {
-			Ok(html.pretty().to_string().into_bytes())
-		} else {
-			Ok(html.to_string().into_bytes())
-		}
+	match grass::from_path(&path, &grass::Options::default()) {
+		Ok(css) => Ok(css.into()),
+		Err(why) => {
+			println!("Err: Failed to parse `{path}`: {why}");
+			Err(why)
+		},
+	}
+}
+
+fn serve_md(path: &str, pretty: bool) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+	let css_path = if path.starts_with("/wiki/") {
+		Some("/assets/scss/wiki/master.scss")
+	} else if path.starts_with("/read/") {
+		Some("/assets/scss/reader/master.scss")
+	} else if path == "/" || path == "/index" || path == "/index.html" || path == "/index.md" {
+		Some("/assets/scss/index.scss")
 	} else {
-		Ok(markdown::convert(&path)?.into_bytes())
+		None
+	};
+
+	let path = WORKING_DIR.to_string() + path;
+
+	let html = markdown::convert_wiki(&path, css_path)?;
+	if pretty {
+		Ok(html.pretty().to_string().into_bytes())
+	} else {
+		Ok(html.to_string().into_bytes())
 	}
 }
 

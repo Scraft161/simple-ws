@@ -14,3 +14,4 @@ chrono = "0.4.31"
 lazy_static = "1.4.0"
 regex = "1.10.2"
 ftags = { git = "https://github.com/Scraft161/ftags", tag = "0.2.1" }
+grass = { version = "0.13.2", default-features = false }

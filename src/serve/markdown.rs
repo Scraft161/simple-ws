@@ -14,6 +14,73 @@ use markdown::mdast;
 
 use ftags::FTag;
 
+/// Markdown parser options,
+/// These are options set by the page itself using the `md-opts` property in the front matter.
+#[derive(Copy, Clone)]
+struct MDOpts {
+	index: bool,
+	taglist: bool,
+	image_wh: bool,
+	spoiler: bool,
+	spoiler_inline: bool,
+	spoiler_block: bool,
+}
+
+impl MDOpts {
+	fn new() -> Self {
+		Self {
+			index: true,
+			taglist: true,
+			image_wh: true,
+			spoiler: true,
+			spoiler_inline: true,
+			spoiler_block: true,
+		}
+	}
+
+	fn from_yaml(yaml: &str) -> Self {
+		let mut md_opts = Self::new();
+		for line in yaml.split('\n') {
+			if let Some(opts) = line.strip_prefix("md-opts: ") {
+				for option in opts.split(' ') {
+					match option {
+						"index"          => md_opts.index          = true,
+						"taglist"        => md_opts.taglist        = true,
+						"image-wh"       => md_opts.image_wh       = true,
+						"spoiler"        => md_opts.spoiler        = true,
+						"spoiler-inline" => md_opts.spoiler_inline = true,
+						"spoiler-block"  => md_opts.spoiler_block  = true,
+
+						"no-index"          => md_opts.index          = false,
+						"no-taglist"        => md_opts.taglist        = false,
+						"no-image-wh"       => md_opts.image_wh       = false,
+						"no-spoiler"        => md_opts.spoiler        = false,
+						"no-spoiler-inline" => md_opts.spoiler_inline = false,
+						"no-spoiler-block"  => md_opts.spoiler_block  = false,
+
+						_ => (),
+					}
+				}
+			}
+		}
+
+		md_opts
+	}
+}
+
+impl std::default::Default for MDOpts {
+	fn default() -> Self {
+		Self {
+			index: true,
+			taglist: true,
+			image_wh: true,
+			spoiler: true,
+			spoiler_inline: true,
+			spoiler_block: true,
+		}
+	}
+}
+
 pub fn convert(path: &str) -> Result<String, Box<dyn Error>> {
 	let md = fs::read_to_string(path)?;
 
@@ -53,6 +120,14 @@ pub fn convert(path: &str) -> Result<String, Box<dyn Error>> {
 	))
 }
 
+/// # convert_wiki
+/// Convert A markdown file according to wiki specifications
+///
+/// Arguments:
+/// - path: &str | Path to the markdown file
+/// - css_path: Option<&str> | Path to the linked CSS file, if present this is sent to the browser,
+/// if `None` is passed it will not link.
+///
 /// It is time for some good ol' fuckshit.
 /// Since MDAST doesn't support ids attached to headings for some dumbass reason we now have to do
 /// this crap ourselves.
@@ -63,7 +138,7 @@ pub fn convert(path: &str) -> Result<String, Box<dyn Error>> {
 /// you.
 ///
 /// - Scraft161
-pub fn convert_wiki(path: &str) -> Result<html_node::Node, Box<dyn Error>> {
+pub fn convert_wiki(path: &str, css_path: Option<&str>) -> Result<html_node::Node, Box<dyn Error>> {
 	let md = fs::read_to_string(path)?;
 
 	let mdast = markdown::to_mdast(
@@ -81,7 +156,7 @@ pub fn convert_wiki(path: &str) -> Result<html_node::Node, Box<dyn Error>> {
 		},
 	)?;
 
-	if let Some(doc) = traverse_mdast(mdast, false) {
+	if let Some(doc) = traverse_mdast(&MDOpts::new(), mdast, false, css_path) {
 		if let html_node::Node::Fragment(ref fragment) = doc {
 			//dbg!(fragment);
 			//let index = generate_index(fragment.clone());
@@ -104,16 +179,22 @@ pub fn convert_wiki(path: &str) -> Result<html_node::Node, Box<dyn Error>> {
 	}
 }
 
-fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_node::Node> {
+fn traverse_mdast(md_opts: &MDOpts, node: markdown::mdast::Node, ignore_p: bool, css_path: Option<&str>) -> Option<html_node::Node> {
 	match node {
 		mdast::Node::Root(root) => {
 			let mut children = Vec::new();
 			let mut page_meta = PageMeta::new();
+			// Shadow the variable here; normally we only see the root node once and we only need
+			// mutability here, the rest can be immutable.
+			let mut md_opts = *md_opts;
 			for md_child in root.children {
-				match traverse_mdast(md_child.clone(), false) {
+				match traverse_mdast(&md_opts, md_child.clone(), false, css_path) {
 					Some(child) => children.push(child),
 					None => match md_child {
-						mdast::Node::Yaml(yaml) => page_meta = PageMeta::from_yaml(&yaml.value),
+						mdast::Node::Yaml(yaml) => {
+							page_meta = PageMeta::from_yaml(&yaml.value);
+							md_opts = MDOpts::from_yaml(&yaml.value);
+						},
 						mdast::Node::Toml(_toml) => {
 							todo!()
 						}
@@ -123,13 +204,18 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 			}
 
 			// Generate Index
-			let index = generate_index(html_node::Fragment {
-				children: children.clone(),
-			});
+			let index = if md_opts.index {
+				generate_index(html_node::Fragment {
+					children: children.clone(),
+				})
+			} else {
+				html!(<>)
+			};
 			// Find index of `Profile` child
 			//if let Some(pos) = children.iter().position(|&x| x ==)
 			let mut profile_found = false;
 			let mut index_attached = false;
+			//println!("Before: {children:#?}");
 			for (i, item) in children.iter().enumerate() {
 				//dbg!(&item);
 				if profile_found {
@@ -170,9 +256,12 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 				} else if let html_node::Node::UnsafeText(text) = item {
 					if text.text == "<div class=\"profile\">" {
 						profile_found = true;
+					} else if text.text == "<div id=\"profile\">" {
+						profile_found = true;
 					}
 				}
 			}
+			//println!("After: {children:#?}");
 
 			// If we didn't attach the index yet; just put it at the top.
 			if !index_attached {
@@ -204,13 +293,32 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 							}
 						}
 						<meta charset="utf-8">
-						<link rel="stylesheet" href="/assets/css/wiki/master.css">
+						{
+							if let Some(css_path) = css_path {
+								html!(
+									<link rel="stylesheet" href=css_path>
+								)
+							} else {
+								html!(<>)
+							}
+						}
 						<link rel="icon" href="/favicon.ico" sizes="any">
 						<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 					</head>
 					<body>
-						<div class="pre-load" style="background-color:#1a1b26;width:100%;height:100%;position:absolute;top:0;left:0;"></div>
-						{children}
+						{
+							// Don't try to avoid FOUC if we have no CSS to fix it.
+							if css_path != None {
+								html!(
+									<div class="pre-load" style="background-color:#1a1b26;width:100%;height:100%;position:absolute;top:0;left:0;"></div>
+								)
+							} else {
+								html!(<>)
+							}
+						}
+						<div class="content">
+							{children}
+						</div>
 					</body>
 				</html>
 			);
@@ -221,7 +329,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::Heading(heading) => {
 			let mut children = Vec::new();
 			for child in heading.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child)
 				}
 			}
@@ -254,7 +362,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::Paragraph(paragraph) => {
 			let mut children = Vec::new();
 			for child in paragraph.children {
-				match traverse_mdast(child, ignore_p) {
+				match traverse_mdast(md_opts, child, ignore_p, css_path) {
 					Some(child) => children.push(child),
 					None => (),
 				};
@@ -293,7 +401,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::Link(link) => {
 			let mut children = Vec::new();
 			for child in link.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child)
 				}
 			}
@@ -323,36 +431,61 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 			};
 			let img_alt = image.alt.clone();
 
+			let (img_url_jxl, img_url_webp) = {
+				let (img_basename, _) = image.url.rsplit_once(".").unwrap();
+				(img_basename.to_owned() + ".jxl", img_basename.to_owned() + ".webp")
+			};
+
 			if IMAGE_W_H.is_match(&image.alt) {
 				let (alt, m_width, m_height) = image_props_from_text(&image.alt);
 
 				if let (Some(width), Some(height)) = (&m_width, &m_height) {
 					Some(html!(
-						<img alt=alt src=image.url title=title width=format!("{width}") height=format!("{height}") loading="lazy">
+						<picture>
+							<source srcset=img_url_jxl type="image/jxl">
+							<source srcset=img_url_webp type="image/webp">
+							<img alt=alt src=image.url title=title width=format!("{width}") height=format!("{height}") loading="lazy">
+						</picture>
 					))
 				} else if let Some(width) = &m_width {
 					Some(html!(
-						<img alt=alt src=image.url title=title width=format!("{width}") loading="lazy">
+						<picture>
+							<source srcset=img_url_jxl type="image/jxl">
+							<source srcset=img_url_webp type="image/webp">
+							<img alt=alt src=image.url title=title width=format!("{width}") loading="lazy">
+						</picture>
 					))
 				} else if let Some(height) = &m_height {
 					Some(html!(
-						<img alt=alt src=image.url title=title height=format!("{height}") loading="lazy">
+						<picture>
+							<source srcset=img_url_jxl type="image/jxl">
+							<source srcset=img_url_webp type="image/webp">
+							<img alt=alt src=image.url title=title height=format!("{height}") loading="lazy">
+						</picture>
 					))
 				} else {
 					Some(html!(
-						<img alt=img_alt src=image.url title=title loading="lazy">
+						<picture>
+							<source srcset=img_url_jxl type="image/jxl">
+							<source srcset=img_url_webp type="image/webp">
+							<img alt=img_alt src=image.url title=title loading="lazy">
+						</picture>
 					))
 				}
 			} else {
 				Some(html!(
-					<img alt=img_alt src=image.url title=title loading="lazy">
+					<picture>
+						<source srcset=img_url_jxl type="image/jxl">
+						<source srcset=img_url_webp type="image/webp">
+						<img alt=img_alt src=image.url title=title loading="lazy">
+					</picture>
 				))
 			}
 		}
 		mdast::Node::Strong(strong) => {
 			let mut children = Vec::new();
 			for child in strong.children {
-				match traverse_mdast(child, false) {
+				match traverse_mdast(md_opts, child, false, css_path) {
 					Some(child) => children.push(child),
 					None => (),
 				};
@@ -367,7 +500,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::Emphasis(em) => {
 			let mut children = Vec::new();
 			for child in em.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child);
 				}
 			}
@@ -381,7 +514,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::Delete(del) => {
 			let mut children = Vec::new();
 			for child in del.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child);
 				}
 			}
@@ -395,7 +528,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::List(list) => {
 			let mut children = Vec::new();
 			for child in list.children {
-				match traverse_mdast(child, false) {
+				match traverse_mdast(md_opts, child, false, css_path) {
 					Some(child) => children.push(child),
 					None => (),
 				};
@@ -422,7 +555,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 				}
 			}
 			for child in li.children {
-				match traverse_mdast(child, !li.spread) {
+				match traverse_mdast(md_opts, child, !li.spread, css_path) {
 					Some(child) => children.push(child),
 					None => (),
 				};
@@ -451,7 +584,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 							}>{
 								let mut children = Vec::new();
 								for child in th.children().unwrap() {
-									if let Some(child) = traverse_mdast(child.clone(), false) {
+									if let Some(child) = traverse_mdast(md_opts, child.clone(), false, css_path) {
 										children.push(child);
 									}
 								}
@@ -464,7 +597,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 							<th>{
 								let mut children = Vec::new();
 								for child in th.children().unwrap() {
-									if let Some(child) = traverse_mdast(child.clone(), false) {
+									if let Some(child) = traverse_mdast(md_opts, child.clone(), false, css_path) {
 										children.push(child);
 									}
 								}
@@ -496,7 +629,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 											}>{
 												let mut children = Vec::new();
 												for child in tc.children().unwrap() {
-													if let Some(child) = traverse_mdast(child.clone(), false) {
+													if let Some(child) = traverse_mdast(md_opts, child.clone(), false, css_path) {
 														children.push(child);
 													}
 												}
@@ -505,7 +638,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 											}</td>
 										}
 									} else {
-										traverse_mdast(tc.clone(), true).unwrap()
+										traverse_mdast(md_opts, tc.clone(), true, css_path).unwrap()
 									}
 								})
 							}
@@ -533,7 +666,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::TableRow(tr) => {
 			let mut children = Vec::new();
 			for child in tr.children {
-				match traverse_mdast(child, false) {
+				match traverse_mdast(md_opts, child, false, css_path) {
 					Some(child) => children.push(child),
 					None => (),
 				}
@@ -546,7 +679,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::TableCell(td) => {
 			let mut children = Vec::new();
 			for child in td.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child)
 				}
 			}
@@ -573,7 +706,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::FootnoteDefinition(fnd) => {
 			let mut children = Vec::new();
 			for child in fnd.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(md_opts, child, false, css_path) {
 					children.push(child)
 				}
 			}
@@ -596,7 +729,7 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 		mdast::Node::BlockQuote(bq) => {
 			let mut children = Vec::new();
 			for child in bq.children {
-				if let Some(child) = traverse_mdast(child, false) {
+				if let Some(child) = traverse_mdast(&md_opts, child, false, css_path) {
 					children.push(child)
 				}
 			}
@@ -615,16 +748,18 @@ fn traverse_mdast(node: markdown::mdast::Node, ignore_p: bool) -> Option<html_no
 }
 
 fn render_spoiler(text: &str) -> html_node::Node {
+	element! {
+		summary("summary") {
+			custom_attr,
+		}
+	}
 	let (title, content) = text[4..].split_once('\n').unwrap();
 	let (content, remainder) = content.rsplit_once("!<:").unwrap();
 	html!(
-		<label class="spoiler-block">
-			<input type="checkbox">
-			<span class="spoiler-title">{text!("{title}")}</span>
-			<span class="spoiler-content">
-				{text!("{content}")}
-			</span>
-		</label>
+		<details>
+			<summary>{text!("{title}")}</summary>
+			{text!("{content}")}
+		</details>
 		{if remainder == "" {
 			html!(<>)
 		} else {
@@ -807,6 +942,7 @@ fn generate_index(root: html_node::Fragment) -> html_node::Node {
 	}
 
 	let doc = html!(
+		<div class="chapter-list"></div>
 		<ul>
 		{
 			index.sub_headings.into_iter().zip(1..).map(|(heading, _)| html!(
