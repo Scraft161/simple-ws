@@ -1,4 +1,9 @@
-use std::{error::Error, fs, str::FromStr};
+use std::{
+	error::Error,
+	fs,
+	path::PathBuf,
+	//str::FromStr,
+};
 
 use html_node::{
 	text,
@@ -12,6 +17,7 @@ use regex::Regex;
 
 use markdown::mdast;
 
+#[cfg(feature = "ftags")]
 use ftags::FTag;
 
 /// Markdown parser options,
@@ -44,19 +50,19 @@ impl MDOpts {
 			if let Some(opts) = line.strip_prefix("md-opts: ") {
 				for option in opts.split(' ') {
 					match option {
-						"index"          => md_opts.index          = true,
-						"taglist"        => md_opts.taglist        = true,
-						"image-wh"       => md_opts.image_wh       = true,
-						"spoiler"        => md_opts.spoiler        = true,
+						"index" => md_opts.index = true,
+						"taglist" => md_opts.taglist = true,
+						"image-wh" => md_opts.image_wh = true,
+						"spoiler" => md_opts.spoiler = true,
 						"spoiler-inline" => md_opts.spoiler_inline = true,
-						"spoiler-block"  => md_opts.spoiler_block  = true,
+						"spoiler-block" => md_opts.spoiler_block = true,
 
-						"no-index"          => md_opts.index          = false,
-						"no-taglist"        => md_opts.taglist        = false,
-						"no-image-wh"       => md_opts.image_wh       = false,
-						"no-spoiler"        => md_opts.spoiler        = false,
+						"no-index" => md_opts.index = false,
+						"no-taglist" => md_opts.taglist = false,
+						"no-image-wh" => md_opts.image_wh = false,
+						"no-spoiler" => md_opts.spoiler = false,
 						"no-spoiler-inline" => md_opts.spoiler_inline = false,
-						"no-spoiler-block"  => md_opts.spoiler_block  = false,
+						"no-spoiler-block" => md_opts.spoiler_block = false,
 
 						_ => (),
 					}
@@ -79,6 +85,25 @@ impl std::default::Default for MDOpts {
 			spoiler_block: true,
 		}
 	}
+}
+
+pub fn convert_to_file(path: &PathBuf, output_file: PathBuf) -> Result<(), Box<dyn Error>> {
+	// Create dir if it doesn't exist
+	let parent = match output_file.parent() {
+		Some(dir) => dir,
+		None => todo!(),
+	};
+
+	if !parent.exists() {
+		fs::create_dir_all(&parent)?;
+	}
+
+	fs::write(
+		output_file,
+		convert(path.to_str().unwrap())?
+	)?;
+
+	Ok(())
 }
 
 pub fn convert(path: &str) -> Result<String, Box<dyn Error>> {
@@ -179,7 +204,12 @@ pub fn convert_wiki(path: &str, css_path: Option<&str>) -> Result<html_node::Nod
 	}
 }
 
-fn traverse_mdast(md_opts: &MDOpts, node: markdown::mdast::Node, ignore_p: bool, css_path: Option<&str>) -> Option<html_node::Node> {
+fn traverse_mdast(
+	md_opts: &MDOpts,
+	node: markdown::mdast::Node,
+	ignore_p: bool,
+	css_path: Option<&str>,
+) -> Option<html_node::Node> {
 	match node {
 		mdast::Node::Root(root) => {
 			let mut children = Vec::new();
@@ -194,7 +224,7 @@ fn traverse_mdast(md_opts: &MDOpts, node: markdown::mdast::Node, ignore_p: bool,
 						mdast::Node::Yaml(yaml) => {
 							page_meta = PageMeta::from_yaml(&yaml.value);
 							md_opts = MDOpts::from_yaml(&yaml.value);
-						},
+						}
 						mdast::Node::Toml(_toml) => {
 							todo!()
 						}
@@ -221,31 +251,39 @@ fn traverse_mdast(md_opts: &MDOpts, node: markdown::mdast::Node, ignore_p: bool,
 				if profile_found {
 					//dbg!(&item);
 					if let html_node::Node::UnsafeText(text) = item {
+						#[cfg(feature = "ftags")]
+						let tags_html = if let Some(tags) = page_meta.tags {
+							html!(
+								<div id="tags">
+									<h4>In categories:</h4> {
+										tags.iter().map(|tag| html!(
+												<a href={format!("tags/{tag}")}>
+													{text!("{tag}")}
+												</a>
+										   ))
+									}
+									</div>
+								 )
+						} else {
+							html!(<>)
+						};
 						if text.text == "</div>" {
 							// Our item
 							children.insert(
 								i + 1,
+								#[cfg(feature = "ftags")]
 								html!(
 									<div id="index" class="index">
 										{index.clone()}
 										{
-											if let Some(tags) = page_meta.tags {
-												html!(
-													<div id="tags">
-														<h4>In categories:</h4>
-														{
-															tags.iter().zip(1..).map(|(tag, _)| html!(
-																<a href={format!("{tag}.tag")}>
-																	{text!("{tag}")}
-																</a>
-															))
-														}
-													</div>
-												)
-											} else {
-												html!(<>)
-											}
+											tags_html
 										}
+									</div>
+								),
+								#[cfg(not(feature = "ftags"))]
+								html!(
+									<div id="index" class="index">
+										{index.clone()}
 									</div>
 								),
 							);
@@ -433,7 +471,10 @@ fn traverse_mdast(md_opts: &MDOpts, node: markdown::mdast::Node, ignore_p: bool,
 
 			let (img_url_jxl, img_url_webp) = {
 				let (img_basename, _) = image.url.rsplit_once(".").unwrap();
-				(img_basename.to_owned() + ".jxl", img_basename.to_owned() + ".webp")
+				(
+					img_basename.to_owned() + ".jxl",
+					img_basename.to_owned() + ".webp",
+				)
 			};
 
 			if IMAGE_W_H.is_match(&image.alt) {
@@ -992,6 +1033,7 @@ fn generate_index(root: html_node::Fragment) -> html_node::Node {
 #[derive(Default)]
 struct PageMeta {
 	title: Option<String>,
+	#[cfg(feature = "ftags")]
 	tags: Option<Vec<FTag>>,
 }
 
@@ -1005,11 +1047,13 @@ impl PageMeta {
 	fn from_yaml(yaml: &str) -> Self {
 		// Loop over the yaml string and match based on prefix
 		let mut title = String::new();
+		#[cfg(feature = "ftags")]
 		let mut tags = Vec::new();
 		for str in yaml.split("\n") {
 			if let Some(yaml_title) = str.strip_prefix("title: ") {
 				title = yaml_title.to_string();
 			} else if let Some(yaml_tags) = str.strip_prefix("tags: ") {
+				#[cfg(feature = "ftags")]
 				yaml_tags
 					.split(',')
 					.for_each(|s| tags.push(FTag::from_str(s.trim()).unwrap()))
@@ -1018,6 +1062,7 @@ impl PageMeta {
 
 		Self {
 			title: if !title.is_empty() { Some(title) } else { None },
+			#[cfg(feature = "ftags")]
 			tags: if !tags.is_empty() { Some(tags) } else { None },
 		}
 	}

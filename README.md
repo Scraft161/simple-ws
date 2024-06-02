@@ -1,12 +1,22 @@
-# simple-ws
+# mdbutler
 
-A simple opinionated multithreaded web server written in rust.
+A simple opinionated multithreaded web server and static site generator written in rust.
 
 ---
 
 ## Why
 
 I wanted to explore server side scripting without the need for php or node, additionally I used this as an opportunity to learn about HTTP.
+
+## Features
+
+| Name     | Default | Description                              |
+| -------- | ------- | :--------------------------------------- |
+| compile  | ✅      | Compile to static site                   |
+| serve    | ✅      | Serve files over HTTP (act as webserver) |
+| markdown | ✅      | Process markdown                         |
+| sass     | ✅      | Process sass and scss                    |
+| ftags    | ❌      | use `ftags` tag indexing (WIP)           |
 
 ## Further goals
 

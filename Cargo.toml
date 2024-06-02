@@ -1,17 +1,26 @@
 [package]
-name = "web-backend"
+name = "mdbutler"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-markdown = "1.0.0-alpha.16"
-snowboard = { version = "1.0.3", features = ["async"] }
-html-node = { version = "0.5.0", features = ["typed", "pretty"] }
+markdown = { version = "1.0.0-alpha.16", optional = true }
+snowboard = { version = "1.0.3", features = ["async"], optional = true }
+html-node = { version = "0.5.0", features = ["typed", "pretty"], optional = true }
 const_format = "0.2.32"
 chrono = "0.4.31"
 lazy_static = "1.4.0"
 regex = "1.10.2"
-ftags = { git = "https://github.com/Scraft161/ftags", tag = "0.2.1" }
-grass = { version = "0.13.2", default-features = false }
+ftags = { git = "https://github.com/Scraft161/ftags", tag = "0.2.1", optional = true }
+grass = { version = "0.13.2", default-features = false, optional = true }
+clap = { version = "4.5.4", features = ["derive"] }
+
+[features]
+default = [ "build", "serve", "markdown", "sass" ]
+build = [ "dep:html-node" ]
+serve = [ "dep:snowboard", "dep:html-node" ]
+markdown = [ "dep:markdown", "dep:html-node" ]
+sass = [ "dep:grass" ]
+ftags = [ "dep:ftags" ]
